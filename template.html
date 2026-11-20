@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>One-Tap JSON Copy</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background-color: #0b0f17;
+            color: #ffffff;
+            padding: 16px 12px 60px 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 480px;
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #ffffff;
+            letter-spacing: -0.3px;
+        }
+        .header p {
+            font-size: 13px;
+            color: #94a3b8;
+            line-height: 1.45;
+            padding: 0 8px;
+        }
+        .stats-bar {
+            background: #141b29;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-top: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .stats-badge {
+            color: #38bdf8;
+        }
+        .remaining-badge {
+            color: #22c55e;
+        }
+        .card-container {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .json-card {
+            background-color: #121824;
+            border: 1px solid #1f293d;
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            transition: all 0.25s ease;
+            position: relative;
+        }
+        .json-card.deleted {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+            display: none;
+        }
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .card-number {
+            color: #22c55e; /* vibrant green like photo */
+        }
+        .card-id {
+            color: #f1f5f9;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .btn-copy {
+            background-color: #0284c7; /* bright blue like photo */
+            color: #ffffff;
+            border: none;
+            border-radius: 7px;
+            padding: 7px 14px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .btn-copy:active {
+            transform: scale(0.96);
+            background-color: #0369a1;
+        }
+        .btn-copy.copied {
+            background-color: #16a34a !important;
+        }
+        .btn-delete {
+            background-color: #ef444422;
+            color: #ef4444;
+            border: 1px solid #ef444455;
+            border-radius: 7px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-delete:active {
+            background-color: #ef4444;
+            color: #ffffff;
+        }
+        .json-box {
+            width: 100%;
+            height: 90px;
+            background-color: #080c14;
+            border: 1px solid #1a2233;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 13px;
+            padding: 10px;
+            resize: none;
+            white-space: pre-wrap;
+            word-break: break-all;
+            outline: none;
+        }
+        .json-box:focus {
+            border-color: #0284c7;
+        }
+        .search-box {
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 14px;
+            background-color: #141b29;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+        }
+        .search-box:focus {
+            border-color: #0284c7;
+        }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            background-color: #16a34a;
+            color: #ffffff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s, transform 0.25s;
+            transform: translateY(10px);
+            z-index: 9999;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>One-Tap JSON Copy</h1>
+        <p id="subheading">Separate cards. Tap COPY JSON to copy only that card's complete JSON, including every original field and token. Nothing is redacted.</p>
+        
+        <div class="stats-bar">
+            <span class="stats-badge" id="totalCount">Total: 0</span>
+            <span class="remaining-badge" id="remainingCount">Remaining: 0</span>
+        </div>
+    </div>
+
+    <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search card number, mobile, user_id..." oninput="filterCards()">
+
+    <div class="card-container" id="cardsContainer">
+        <!-- Cards will be populated by JS -->
+    </div>
+
+    <div class="toast" id="toast">Copied to clipboard!</div>
+
+    <script>
+        // RAW_JSON_DATA_PLACEHOLDER
+
+        let totalCards = 0;
+        let remainingCards = 0;
+
+        function init() {
+            const container = document.getElementById("cardsContainer");
+            totalCards = jsonDataList.length;
+            remainingCards = totalCards;
+
+            document.getElementById("subheading").innerText = 
+                `${totalCards} separate cards. Tap COPY JSON to copy only that card's complete JSON, including every original field and token. Nothing is redacted.`;
+
+            updateStats();
+
+            jsonDataList.forEach((item, index) => {
+                const cardIndex = index + 1;
+                let titleLabel = item.mobile || item.user_id || item.phone || item.id || `Item ${cardIndex}`;
+                let rawJsonString = typeof item === 'string' ? item : JSON.stringify(item);
+
+                const card = document.createElement("div");
+                card.className = "json-card";
+                card.id = `card-${cardIndex}`;
+                card.setAttribute("data-search", `${cardIndex} ${titleLabel} ${rawJsonString}`.toLowerCase());
+
+                card.innerHTML = `
+                    <div class="card-top">
+                        <div class="card-title">
+                            <span class="card-number">#${cardIndex}</span>
+                            <span class="card-id">${escapeHtml(String(titleLabel))}</span>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn-copy" id="btn-copy-${cardIndex}" onclick="copyCard(${cardIndex})">COPY JSON</button>
+                            <button class="btn-delete" title="Delete used card" onclick="deleteCard(${cardIndex})">🗑️ Delete</button>
+                        </div>
+                    </div>
+                    <textarea class="json-box" id="json-text-${cardIndex}" readonly>${escapeHtml(rawJsonString)}</textarea>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function copyCard(index) {
+            const textArea = document.getElementById(`json-text-${index}`);
+            const btn = document.getElementById(`btn-copy-${index}`);
+            
+            // Clipboard copy
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textArea.value).then(() => onCopied(btn));
+            } else {
+                textArea.select();
+                document.execCommand('copy');
+                onCopied(btn);
+            }
+        }
+
+        function onCopied(btn) {
+            const originalText = btn.innerText;
+            btn.innerText = "COPIED!";
+            btn.classList.add("copied");
+
+            showToast("Copied to clipboard!");
+
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.remove("copied");
+            }, 1200);
+        }
+
+        function deleteCard(index) {
+            const card = document.getElementById(`card-${index}`);
+            if (card && !card.classList.contains("deleted")) {
+                card.classList.add("deleted");
+                remainingCards--;
+                updateStats();
+                showToast(`Card #${index} marked as used & deleted!`);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById("totalCount").innerText = `Total: ${totalCards}`;
+            document.getElementById("remainingCount").innerText = `Remaining: ${remainingCards}`;
+        }
+
+        function filterCards() {
+            const query = document.getElementById("searchBox").value.toLowerCase().trim();
+            const cards = document.querySelectorAll(".json-card");
+            cards.forEach(card => {
+                if (card.classList.contains("deleted")) return;
+                const searchContent = card.getAttribute("data-search") || "";
+                if (!query || searchContent.includes(query)) {
+                    card.style.display = "block";
+                } else {
+                    card.style.display = "none";
+                }
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.classList.add("show");
+            setTimeout(() => {
+                toast.classList.remove("show");
+            }, 1800);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

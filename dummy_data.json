@@ -1,0 +1,72 @@
+[
+  {
+    "mobile": "7893913570",
+    "user_id": "61511720",
+    "token": "tok_live_98a72b14c3e89a",
+    "status": "active",
+    "region": "IN-MH"
+  },
+  {
+    "mobile": "6938234597",
+    "user_id": "61508547",
+    "token": "tok_live_12c98e47a1f56b",
+    "status": "active",
+    "region": "IN-DL"
+  },
+  {
+    "mobile": "7845287402",
+    "user_id": "61509357",
+    "token": "tok_live_44b33d88e0c21a",
+    "status": "pending",
+    "region": "IN-UP"
+  },
+  {
+    "mobile": "9823145670",
+    "user_id": "61520011",
+    "token": "tok_live_77a99f12b4d53c",
+    "status": "active",
+    "region": "IN-KA"
+  },
+  {
+    "mobile": "8877665544",
+    "user_id": "61534098",
+    "token": "tok_live_66e22c99a8b17d",
+    "status": "active",
+    "region": "IN-BR"
+  },
+  {
+    "mobile": "9123456789",
+    "user_id": "61545612",
+    "token": "tok_live_33f88b55c1e90a",
+    "status": "active",
+    "region": "IN-RJ"
+  },
+  {
+    "mobile": "9876543210",
+    "user_id": "61556789",
+    "token": "tok_live_55a11d44b2f88e",
+    "status": "active",
+    "region": "IN-WB"
+  },
+  {
+    "mobile": "7001234567",
+    "user_id": "61567890",
+    "token": "tok_live_22c77e33a9d45f",
+    "status": "active",
+    "region": "IN-MP"
+  },
+  {
+    "mobile": "8123456780",
+    "user_id": "61578901",
+    "token": "tok_live_99d44a22e8c67b",
+    "status": "active",
+    "region": "IN-GJ"
+  },
+  {
+    "mobile": "9988776655",
+    "user_id": "61589012",
+    "token": "tok_live_88b55f11c7a34e",
+    "status": "active",
+    "region": "IN-TN"
+  }
+]
