@@ -16,22 +16,18 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "9298788182:AAHoXdCXG45c9HY2H472OzhR3l5U3hIhV
 CONFIG_FILE = "config.json"
 DATA_DIR = "generated_htmls"
 PORT = int(os.getenv("PORT", 8000))
-WEB_BASE_URL = os.getenv("WEB_BASE_URL", "")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Admin and Channel configs
+# Admin config
 env_admin = os.getenv("ADMIN_ID")
 initial_admins = [int(env_admin)] if env_admin and env_admin.isdigit() else [8338099238]
-env_channel_id = os.getenv("CHANNEL_ID", "@shein577")
-env_channel_link = os.getenv("CHANNEL_LINK", "https://t.me/shein577")
-env_force_sub = os.getenv("FORCE_SUB", "True").lower() in ("true", "1", "yes")
 
 default_config = {
     "admin_ids": initial_admins,
-    "channel_id": env_channel_id,
-    "channel_link": env_channel_link,
-    "force_sub": env_force_sub,
+    "channel_id": "",
+    "channel_link": "",
+    "force_sub": False,
     "users": initial_admins.copy()
 }
 
@@ -66,7 +62,6 @@ def home():
 
 @app.get("/view/{filename}", response_class=HTMLResponse)
 def view_html(filename: str):
-    # Sanitize filename
     clean_name = os.path.basename(filename)
     filepath = os.path.join(DATA_DIR, clean_name)
     if not os.path.exists(filepath):
@@ -78,18 +73,6 @@ def view_html(filename: str):
 
 def is_admin(user_id):
     return user_id in config.get("admin_ids", [])
-
-def check_channel_joined(user_id):
-    if not config.get("force_sub") or not config.get("channel_id"):
-        return True
-    try:
-        member = bot.get_chat_member(config["channel_id"], user_id)
-        if member.status in ['creator', 'administrator', 'member']:
-            return True
-        return False
-    except Exception as e:
-        print(f"Channel check note: {e}")
-        return True
 
 def parse_json_content(raw_text):
     raw_text = raw_text.strip()
@@ -151,22 +134,10 @@ def handle_start(message):
         config["users"].append(user_id)
         save_config(config)
 
-    if not is_admin(user_id) and not check_channel_joined(user_id):
-        btn = types.InlineKeyboardButton("📢 Join Channel", url=config.get("channel_link", "https://t.me"))
-        check_btn = types.InlineKeyboardButton("🔄 Verify Joined", callback_data="check_sub")
-        markup = types.InlineKeyboardMarkup([[btn], [check_btn]])
-        bot.send_message(
-            message.chat.id,
-            "⚠️ *Bot use karne ke liye pehle hamara Telegram Channel join karein!*",
-            parse_mode="Markdown",
-            reply_markup=markup
-        )
-        return
-
     welcome_text = (
         f"👋 *Hello {message.from_user.first_name}!*\n\n"
         f"📁 *One-Tap JSON Viewer Bot Me Aapka Swagat Hai!*\n\n"
-        f"✅ Har JSON alag-alag card me badlega\n"
+        f"✅ Har JSON alag-alag card me convert hoga\n"
         f"✅ Ek tap me **COPY JSON**\n"
         f"✅ Used data ko **🗑️ Delete** karne ka option\n"
         f"✅ Search bar to find numbers / tokens\n\n"
@@ -190,57 +161,28 @@ def handle_admin_command(message):
 
 
 def show_admin_panel(chat_id, message_id=None):
-    channel_status = "ON (Active)" if config.get("force_sub") else "OFF (Disabled)"
-    ch_id = config.get("channel_id") or "Not set"
-    ch_link = config.get("channel_link") or "Not set"
     total_users = len(config.get("users", []))
     admin_list = ", ".join(map(str, config.get("admin_ids", [])))
 
     text = (
         f"👑 *ADMIN CONTROL PANEL*\n\n"
         f"🔑 *Admin IDs:* `{admin_list}`\n"
-        f"👥 *Total Bot Users:* `{total_users}`\n"
-        f"📢 *Force Join:* `{channel_status}`\n"
-        f"🆔 *Channel ID:* `{ch_id}`\n"
-        f"🔗 *Channel Link:* `{ch_link}`\n\n"
-        f"Niche diye gaye buttons se settings control karein:"
+        f"👥 *Total Bot Users:* `{total_users}`\n\n"
+        f"Niche diye gaye buttons se control karein:"
     )
 
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_toggle = types.InlineKeyboardButton(
-        f"Force Join: {'Turn OFF' if config.get('force_sub') else 'Turn ON'}",
-        callback_data="admin_toggle_fsub"
-    )
-    btn_set_ch = types.InlineKeyboardButton("📢 Set Channel", callback_data="admin_set_channel")
     btn_add_admin = types.InlineKeyboardButton("➕ Add Admin", callback_data="admin_add_admin")
-    btn_broadcast = types.InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast")
+    btn_broadcast = types.InlineKeyboardButton("📣 Broadcast Message", callback_data="admin_broadcast")
     btn_close = types.InlineKeyboardButton("🔙 Close Panel", callback_data="admin_close")
 
-    markup.add(btn_toggle)
-    markup.add(btn_set_ch, btn_add_admin)
-    markup.add(btn_broadcast, btn_close)
+    markup.add(btn_add_admin, btn_broadcast)
+    markup.add(btn_close)
 
     if message_id:
         bot.edit_message_text(text, chat_id, message_id, parse_mode="Markdown", reply_markup=markup)
     else:
         bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
-def callback_check_sub(call):
-    user_id = call.from_user.id
-    if check_channel_joined(user_id):
-        try:
-            bot.answer_callback_query(call.id, "✅ Verified! Welcome.")
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception:
-            pass
-        handle_start(call.message)
-    else:
-        try:
-            bot.answer_callback_query(call.id, "❌ Aapne abhi tak channel join nahi kiya!", show_alert=True)
-        except Exception:
-            pass
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
@@ -262,19 +204,6 @@ def handle_admin_callback(call):
     if data == "admin_panel":
         show_admin_panel(call.message.chat.id, call.message.message_id)
 
-    elif data == "admin_toggle_fsub":
-        config["force_sub"] = not config.get("force_sub", False)
-        save_config(config)
-        show_admin_panel(call.message.chat.id, call.message.message_id)
-
-    elif data == "admin_set_channel":
-        msg = bot.send_message(
-            call.message.chat.id,
-            "📢 Send Channel Username/ID and Invite Link like this:\n\n`@shein577 https://t.me/shein577`",
-            parse_mode="Markdown"
-        )
-        bot.register_next_step_handler(msg, process_set_channel)
-
     elif data == "admin_add_admin":
         msg = bot.send_message(
             call.message.chat.id,
@@ -292,21 +221,6 @@ def handle_admin_callback(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-
-
-def process_set_channel(message):
-    try:
-        parts = message.text.strip().split()
-        if len(parts) >= 2:
-            config["channel_id"] = parts[0]
-            config["channel_link"] = parts[1]
-            config["force_sub"] = True
-            save_config(config)
-            bot.send_message(message.chat.id, "✅ Channel successfully updated and Force-Sub Enabled!")
-        else:
-            bot.send_message(message.chat.id, "❌ Invalid format. Please provide: `@username https://t.me/link`")
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Error: {e}")
 
 
 def process_add_admin(message):
@@ -339,11 +253,6 @@ def process_broadcast(message):
 # Handle File Upload
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
-    user_id = message.from_user.id
-    if not is_admin(user_id) and not check_channel_joined(user_id):
-        bot.send_message(message.chat.id, "⚠️ Please join channel first using /start")
-        return
-
     doc = message.document
     progress_msg = bot.send_message(message.chat.id, "⏳ *File process ho rahi hai...*", parse_mode="Markdown")
 
@@ -401,11 +310,6 @@ def handle_document(message):
 # Handle Direct Raw Text JSON Paste
 @bot.message_handler(func=lambda msg: msg.text and (msg.text.strip().startswith("{") or msg.text.strip().startswith("[")))
 def handle_text_json(message):
-    user_id = message.from_user.id
-    if not is_admin(user_id) and not check_channel_joined(user_id):
-        bot.send_message(message.chat.id, "⚠️ Please join channel first using /start")
-        return
-
     progress_msg = bot.send_message(message.chat.id, "⏳ *Text process ho raha hai...*", parse_mode="Markdown")
     try:
         json_items = parse_json_content(message.text)
@@ -445,10 +349,8 @@ def start_bot_polling():
 
 
 if __name__ == "__main__":
-    # Start Telegram Bot in background thread
     t = threading.Thread(target=start_bot_polling, daemon=True)
     t.start()
 
-    # Start FastAPI Web Server on main thread (Render uses this port)
     print(f"🌐 FastAPI Web Server listening on port {PORT}...")
     uvicorn.run(app, host="0.0.0.0", port=PORT)
