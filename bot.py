@@ -34,7 +34,8 @@ default_config = {
         }
     ],
     "force_sub": True,
-    "users": initial_admins.copy()
+    "users": initial_admins.copy(),
+    "user_addresses": {}  # Stores custom common address for each user: {"user_id": "Address Text"}
 }
 
 def load_config():
@@ -47,12 +48,8 @@ def load_config():
                         cfg.setdefault("admin_ids", []).append(a)
                 if "channels" not in cfg:
                     cfg["channels"] = []
-                    if cfg.get("channel_id"):
-                        cfg["channels"].append({
-                            "id": cfg.get("channel_id"),
-                            "link": cfg.get("channel_link", "https://t.me"),
-                            "title": "Channel 1"
-                        })
+                if "user_addresses" not in cfg:
+                    cfg["user_addresses"] = {}
                 return cfg
         except Exception:
             return default_config.copy()
@@ -118,42 +115,71 @@ def get_unjoined_channels(user_id):
             pass
     return unjoined
 
-def parse_json_content(raw_text):
+def parse_json_content(raw_text, user_address=""):
+    """
+    Parses JSON list, dict, or lines.
+    If user_address is provided, injects it into every JSON object!
+    """
     raw_text = raw_text.strip()
+    items = []
+
+    # 1. Standard JSON loads
     try:
         parsed = json.loads(raw_text)
         if isinstance(parsed, list):
-            return parsed
+            items = parsed
         elif isinstance(parsed, dict):
+            found_list = False
             for k, v in parsed.items():
                 if isinstance(v, list) and len(v) > 0 and isinstance(v[0], (dict, list)):
-                    return v
-            return [parsed]
+                    items = v
+                    found_list = True
+                    break
+            if not found_list:
+                items = [parsed]
     except Exception:
         pass
 
-    items = []
-    lines = raw_text.splitlines()
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-            items.append(obj)
-        except Exception:
-            pass
-    if items:
-        return items
+    # 2. Line by line JSON
+    if not items:
+        lines = raw_text.splitlines()
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                items.append(obj)
+            except Exception:
+                pass
 
-    pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-    matches = re.findall(pattern, raw_text)
-    for m in matches:
+    # 3. Regex match for curly braces JSON blocks {...}
+    if not items:
+        pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        matches = re.findall(pattern, raw_text)
+        for m in matches:
+            try:
+                obj = json.loads(m)
+                items.append(obj)
+            except Exception:
+                pass
+
+    # If common address is set, inject it into EVERY JSON item
+    if user_address and items:
+        # Check if address is valid JSON dict (e.g. {"street": "...", "pincode": "..."})
+        custom_dict = None
         try:
-            obj = json.loads(m)
-            items.append(obj)
+            if user_address.strip().startswith("{") and user_address.strip().endswith("}"):
+                custom_dict = json.loads(user_address.strip())
         except Exception:
             pass
+
+        for it in items:
+            if isinstance(it, dict):
+                if custom_dict and isinstance(custom_dict, dict):
+                    it.update(custom_dict)
+                else:
+                    it["address"] = user_address
 
     return items
 
@@ -184,7 +210,7 @@ def handle_start(message):
             show_force_sub_message(message.chat.id, unjoined)
             return
 
-    show_main_menu(message.chat.id, message.from_user.first_name, is_admin(user_id))
+    show_main_menu(message.chat.id, message.from_user.first_name, is_admin(user_id), user_id)
 
 
 def show_force_sub_message(chat_id, unjoined_channels):
@@ -202,22 +228,91 @@ def show_force_sub_message(chat_id, unjoined_channels):
     bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=markup)
 
 
-def show_main_menu(chat_id, first_name, is_adm=False):
+def show_main_menu(chat_id, first_name, is_adm=False, user_id=None):
+    current_addr = config.get("user_addresses", {}).get(str(user_id or chat_id), "")
+    addr_status = f"📍 *Current Common Address:*\n`{current_addr}`\n_(File upload hote hi sabhi JSON me yeh address jud jayega)_\n" if current_addr else "📍 *Common Address:* _Not set (Normal mode)_\n"
+
     welcome_text = (
         f"👋 *Hello {first_name}!*\n\n"
         f"✨ *One-Tap JSON Viewer Bot Me Swagat Hai!*\n\n"
-        f"Is bot se aap kisi bhi JSON file ko stylish interactive cards me badal sakte hain:\n"
-        f"🔹 *Har JSON alag-alag card* me display hoga\n"
-        f"🔹 *One-Tap COPY JSON* button\n"
-        f"🔹 *Used Data Delete* karne ka option\n"
-        f"🔹 *Search Bar* (Filter mobile / IDs / tokens)\n\n"
+        f"🔹 *Har JSON alag-alag card* me convert hoga\n"
+        f"🔹 *COPY NO.* & *COPY JSON* separate buttons\n"
+        f"🔹 *Delete used data* option\n"
+        f"🔹 *Auto-Inject Address:* Ek address set karo, sab me jud jayega!\n\n"
+        f"{addr_status}\n"
         f"👉 *Apni JSON File (`.json` ya `.txt`) yahan send karein:* 📤"
     )
-    markup = types.InlineKeyboardMarkup()
+
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    btn_set_addr = types.InlineKeyboardButton("📍 Set Address", callback_data="set_address")
+    btn_clear_addr = types.InlineKeyboardButton("❌ Clear Address", callback_data="clear_address")
+    markup.add(btn_set_addr, btn_clear_addr)
+
     if is_adm:
         markup.add(types.InlineKeyboardButton("⚙️ Open Admin Panel", callback_data="admin_panel"))
 
     bot.send_message(chat_id, welcome_text, parse_mode="Markdown", reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data in ["set_address", "clear_address"])
+def handle_address_callback(call):
+    user_id = str(call.from_user.id)
+    if call.data == "set_address":
+        msg = bot.send_message(
+            call.message.chat.id,
+            "📍 *Apna Common Address Bhejiye:*\n\n"
+            "Aap plain text address bhej sakte hain:\n"
+            "`Flat 101, ABC Tower, New Delhi, PIN 110001`\n\n"
+            "Ya fir JSON format me bhi:\n"
+            "`{\"address\": \"Delhi\", \"pincode\": \"110001\"}`\n\n"
+            "_(Jo address aap bhejenge, wo aapki file ke **saare JSON records** me auto-add ho jayega!)_",
+            parse_mode="Markdown"
+        )
+        bot.register_next_step_handler(msg, process_user_address)
+    elif call.data == "clear_address":
+        if "user_addresses" in config and user_id in config["user_addresses"]:
+            del config["user_addresses"][user_id]
+            save_config(config)
+            bot.answer_callback_query(call.id, "✅ Address cleared! Normal mode active.")
+        else:
+            bot.answer_callback_query(call.id, "ℹ️ Koi address set nahi tha.")
+        show_main_menu(call.message.chat.id, call.from_user.first_name, is_admin(call.from_user.id), call.from_user.id)
+
+
+def process_user_address(message):
+    user_id = str(message.from_user.id)
+    addr_text = message.text.strip()
+    if not addr_text:
+        bot.send_message(message.chat.id, "❌ Address khali nahi ho sakta.")
+        return
+
+    config.setdefault("user_addresses", {})[user_id] = addr_text
+    save_config(config)
+    bot.send_message(
+        message.chat.id,
+        f"✅ *Common Address Successfully Saved!*\n\n📍 `{addr_text}`\n\nAb aap koi bhi JSON file upload karenge, yeh address **har ek JSON ke andar auto-inject** ho jayega! 🚀",
+        parse_mode="Markdown"
+    )
+    show_main_menu(message.chat.id, message.from_user.first_name, is_admin(message.from_user.id), message.from_user.id)
+
+
+# Command shortcut: /address
+@bot.message_handler(commands=['address', 'setaddress'])
+def handle_address_command(message):
+    parts = message.text.split(maxsplit=1)
+    user_id = str(message.from_user.id)
+    if len(parts) > 1:
+        addr = parts[1].strip()
+        config.setdefault("user_addresses", {})[user_id] = addr
+        save_config(config)
+        bot.send_message(message.chat.id, f"✅ *Common Address Set to:*\n`{addr}`", parse_mode="Markdown")
+    else:
+        current = config.get("user_addresses", {}).get(user_id, "Not set")
+        bot.send_message(
+            message.chat.id,
+            f"📍 *Current Address:* `{current}`\n\nNaya address set karne ke liye aise likhein:\n`/address Flat 101, Delhi, 110001`",
+            parse_mode="Markdown"
+        )
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
@@ -230,7 +325,7 @@ def callback_check_sub(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        show_main_menu(call.message.chat.id, call.from_user.first_name, is_admin(user_id))
+        show_main_menu(call.message.chat.id, call.from_user.first_name, is_admin(user_id), user_id)
     else:
         try:
             bot.answer_callback_query(
@@ -449,7 +544,8 @@ def handle_document(message):
         downloaded_bytes = bot.download_file(file_info.file_path)
         content_text = downloaded_bytes.decode('utf-8', errors='ignore')
 
-        json_items = parse_json_content(content_text)
+        user_addr = config.get("user_addresses", {}).get(str(user_id), "")
+        json_items = parse_json_content(content_text, user_addr)
         if not json_items:
             bot.edit_message_text(
                 "❌ *File me koi valid JSON data nahi mila!* Kripya valid `.json` ya line-by-line JSON wali `.txt` file bhejein.",
@@ -466,9 +562,10 @@ def handle_document(message):
 
         generate_html_viewer(json_items, out_filepath)
 
+        addr_note = f"\n📍 *Custom Address Injected:* `{user_addr}`" if user_addr else ""
         caption = (
             f"✅ *Aapka JSON Viewer Ready Hai!*\n\n"
-            f"📦 *Total JSON Cards:* `{total_count}`\n\n"
+            f"📦 *Total JSON Cards:* `{total_count}`{addr_note}\n\n"
             f"📱 *How to use:*\n"
             f"• Niche button se **🌐 Open Directly in Browser** karein.\n"
             f"• Ya attached HTML file download karke open karein."
@@ -507,7 +604,8 @@ def handle_text_json(message):
 
     progress_msg = bot.send_message(message.chat.id, "⏳ *Text process ho raha hai...*", parse_mode="Markdown")
     try:
-        json_items = parse_json_content(message.text)
+        user_addr = config.get("user_addresses", {}).get(str(user_id), "")
+        json_items = parse_json_content(message.text, user_addr)
         if not json_items:
             bot.edit_message_text("❌ No valid JSON found.", message.chat.id, progress_msg.message_id)
             return
@@ -519,6 +617,7 @@ def handle_text_json(message):
 
         generate_html_viewer(json_items, out_filepath)
 
+        addr_note = f"\n📍 *Custom Address Injected:* `{user_addr}`" if user_addr else ""
         web_base = os.getenv("WEB_BASE_URL", WEB_BASE_URL).strip()
         markup = types.InlineKeyboardMarkup()
         if web_base:
@@ -529,7 +628,7 @@ def handle_text_json(message):
             bot.send_document(
                 message.chat.id,
                 html_file,
-                caption=f"✅ *HTML Ready!* Total Cards: `{total_count}`\nOpen in Browser.",
+                caption=f"✅ *HTML Ready!* Total Cards: `{total_count}`{addr_note}\nOpen in Browser.",
                 parse_mode="Markdown",
                 reply_markup=markup if web_base else None
             )
@@ -549,7 +648,6 @@ def start_bot_polling():
 
 
 def ping_self():
-    """Keeps the Render free tier awake by pinging itself every 10 minutes"""
     time.sleep(30)
     import requests
     while True:
@@ -558,15 +656,13 @@ def ping_self():
                 requests.get(f"{WEB_BASE_URL.rstrip('/')}/healthz", timeout=10)
         except Exception:
             pass
-        time.sleep(600)  # Ping every 10 minutes
+        time.sleep(600)
 
 
 if __name__ == "__main__":
-    # Start bot thread
     t = threading.Thread(target=start_bot_polling, daemon=True)
     t.start()
 
-    # Start self-ping thread to prevent Render sleep
     t_ping = threading.Thread(target=ping_self, daemon=True)
     t_ping.start()
 
