@@ -15,7 +15,10 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9298788182:AAHoXdCXG45c9HY2H472OzhR3l5U3hIhVT0")
 CONFIG_FILE = "config.json"
 DATA_DIR = "generated_htmls"
-PORT = int(os.getenv("PORT", 8000))
+PORT = int(os.getenv("PORT", 10000))
+
+# Web URL for Direct Browser Preview
+WEB_BASE_URL = os.getenv("WEB_BASE_URL", "https://json-bot-17bm.onrender.com")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -56,9 +59,14 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # ==================== FASTAPI WEB SERVER ====================
 app = FastAPI()
 
-@app.get("/")
+# Render Health Checks use GET and HEAD
+@app.api_route("/", methods=["GET", "HEAD"])
 def home():
     return {"status": "ok", "message": "One-Tap JSON Viewer Bot is live!"}
+
+@app.api_route("/healthz", methods=["GET", "HEAD"])
+def healthz():
+    return {"status": "ok"}
 
 @app.get("/view/{filename}", response_class=HTMLResponse)
 def view_html(filename: str):
@@ -286,7 +294,7 @@ def handle_document(message):
             f"• Ya fir attached HTML file download karke open karein."
         )
 
-        web_base = os.getenv("WEB_BASE_URL", "").strip()
+        web_base = os.getenv("WEB_BASE_URL", WEB_BASE_URL).strip()
         markup = types.InlineKeyboardMarkup()
         if web_base:
             web_url = f"{web_base.rstrip('/')}/view/{out_filename}"
@@ -324,7 +332,7 @@ def handle_text_json(message):
 
         generate_html_viewer(json_items, out_filepath)
 
-        web_base = os.getenv("WEB_BASE_URL", "").strip()
+        web_base = os.getenv("WEB_BASE_URL", WEB_BASE_URL).strip()
         markup = types.InlineKeyboardMarkup()
         if web_base:
             web_url = f"{web_base.rstrip('/')}/view/{out_filename}"
@@ -353,4 +361,5 @@ if __name__ == "__main__":
     t.start()
 
     print(f"🌐 FastAPI Web Server listening on port {PORT}...")
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    # Render port binding
+    uvicorn.run(app, host="0.0.0.0", port=PORT, access_log=True)
