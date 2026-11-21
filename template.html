@@ -58,7 +58,7 @@
             color: #22c55e;
         }
         
-        /* Persistent Common Address Section */
+        /* Universal Meesho Compatible Address Box */
         .address-container {
             width: 100%;
             max-width: 480px;
@@ -102,7 +102,7 @@
             color: #ffffff;
             border: none;
             border-radius: 6px;
-            padding: 7px;
+            padding: 8px;
             font-size: 12px;
             font-weight: 700;
             cursor: pointer;
@@ -116,7 +116,7 @@
             color: #ef4444;
             border: 1px solid #ef444444;
             border-radius: 6px;
-            padding: 7px;
+            padding: 8px;
             font-size: 12px;
             cursor: pointer;
         }
@@ -286,13 +286,13 @@
             <span class="remaining-badge" id="remainingCount">Remaining: 0</span>
         </div>
 
-        <!-- 📍 Common Address Section in Webpage with LocalStorage Persistence -->
+        <!-- 📍 Universal Meesho Compatible Address Section -->
         <div class="address-container">
             <div class="address-header">
-                <span>📍 Set Common Address For All Cards</span>
+                <span>📍 Set Common Address (Meesho Auto-Fill Ready)</span>
                 <span id="addrStatus" style="color: #94a3b8; font-size: 11px;">Not Applied</span>
             </div>
-            <input type="text" class="address-input" id="customAddressInput" placeholder="Enter address to add in all JSONs (e.g. Delhi, PIN 110001)">
+            <input type="text" class="address-input" id="customAddressInput" placeholder="Near MAA shakuntalam library 112638 delhi">
             <div class="address-btns">
                 <button class="btn-apply-addr" onclick="applyCommonAddress(true)">Apply to All Cards</button>
                 <button class="btn-clear-addr" onclick="resetToOriginal()">Reset</button>
@@ -323,6 +323,45 @@
             }
             const match = String(item).match(/\b\d{10}\b/);
             return match ? match[0] : "";
+        }
+
+        function parseAddressComponents(rawAddr) {
+            // Intelligent parser: extracts 6-digit Indian PIN code and city
+            let pinMatch = rawAddr.match(/\b\d{6}\b/);
+            let pincode = pinMatch ? pinMatch[0] : "";
+            
+            // Common Indian cities
+            let city = "Delhi";
+            const cities = ["Delhi", "Mumbai", "Bangalore", "Kolkata", "Chennai", "Hyderabad", "Ahmedabad", "Pune", "Jaipur", "Lucknow", "Patna", "Noida", "Gurgaon", "Ghaziabad", "Kanpur", "Surat", "Indore", "Bhopal"];
+            for (let c of cities) {
+                if (new RegExp("\\b" + c + "\\b", "i").test(rawAddr)) {
+                    city = c;
+                    break;
+                }
+            }
+
+            return {
+                address: rawAddr,
+                delivery_address: rawAddr,
+                address_line_1: rawAddr,
+                house_no: rawAddr,
+                street: rawAddr,
+                landmark: rawAddr,
+                pincode: pincode,
+                postal_code: pincode,
+                city: city,
+                state: city,
+                shipping_address: {
+                    name: "Customer",
+                    address: rawAddr,
+                    address_line_1: rawAddr,
+                    house_no: rawAddr,
+                    pincode: pincode,
+                    city: city,
+                    state: city,
+                    landmark: rawAddr
+                }
+            };
         }
 
         function renderCards() {
@@ -376,26 +415,17 @@
                 return;
             }
 
-            // Save in Browser localStorage so refresh karne par na hate!
             try {
                 localStorage.setItem(STORAGE_KEY_ADDR, addr);
             } catch(e) {}
 
-            let customDict = null;
-            try {
-                if (addr.startsWith("{") && addr.endsWith("}")) {
-                    customDict = JSON.parse(addr);
-                }
-            } catch(e) {}
+            let parsedUniversal = parseAddressComponents(addr);
 
             activeDataList = originalDataList.map(item => {
                 let copy = JSON.parse(JSON.stringify(item));
                 if (typeof copy === 'object' && copy !== null) {
-                    if (customDict && typeof customDict === 'object') {
-                        Object.assign(copy, customDict);
-                    } else {
-                        copy["address"] = addr;
-                    }
+                    // Inject all Meesho compatible fields
+                    Object.assign(copy, parsedUniversal);
                 }
                 return copy;
             });
@@ -403,7 +433,7 @@
             document.getElementById("addrStatus").innerText = "Applied & Saved ✅";
             document.getElementById("addrStatus").style.color = "#22c55e";
             renderCards();
-            if (showToastMsg) showToast("Address applied & saved!");
+            if (showToastMsg) showToast("Meesho compatible address applied!");
         }
 
         function resetToOriginal() {
@@ -496,7 +526,6 @@
         }
 
         window.onload = function() {
-            // Check if user previously saved an address in localStorage
             let savedAddr = "";
             try {
                 savedAddr = localStorage.getItem(STORAGE_KEY_ADDR) || "";
@@ -504,7 +533,7 @@
 
             if (savedAddr) {
                 document.getElementById("customAddressInput").value = savedAddr;
-                applyCommonAddress(false); // auto apply on load/refresh!
+                applyCommonAddress(false);
             } else {
                 renderCards();
             }
