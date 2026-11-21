@@ -58,7 +58,7 @@
             color: #22c55e;
         }
         
-        /* Common Address Section right inside web UI */
+        /* Persistent Common Address Section */
         .address-container {
             width: 100%;
             max-width: 480px;
@@ -286,7 +286,7 @@
             <span class="remaining-badge" id="remainingCount">Remaining: 0</span>
         </div>
 
-        <!-- 📍 Common Address Section in Webpage -->
+        <!-- 📍 Common Address Section in Webpage with LocalStorage Persistence -->
         <div class="address-container">
             <div class="address-header">
                 <span>📍 Set Common Address For All Cards</span>
@@ -294,7 +294,7 @@
             </div>
             <input type="text" class="address-input" id="customAddressInput" placeholder="Enter address to add in all JSONs (e.g. Delhi, PIN 110001)">
             <div class="address-btns">
-                <button class="btn-apply-addr" onclick="applyCommonAddress()">Apply to All Cards</button>
+                <button class="btn-apply-addr" onclick="applyCommonAddress(true)">Apply to All Cards</button>
                 <button class="btn-clear-addr" onclick="resetToOriginal()">Reset</button>
             </div>
         </div>
@@ -310,6 +310,7 @@
     <script>
         // RAW_JSON_DATA_PLACEHOLDER
 
+        const STORAGE_KEY_ADDR = "one_tap_saved_address";
         let originalDataList = JSON.parse(JSON.stringify(jsonDataList));
         let activeDataList = JSON.parse(JSON.stringify(jsonDataList));
         let totalCards = 0;
@@ -368,12 +369,17 @@
             });
         }
 
-        function applyCommonAddress() {
+        function applyCommonAddress(showToastMsg = true) {
             const addr = document.getElementById("customAddressInput").value.trim();
             if (!addr) {
-                showToast("Please enter an address!");
+                if (showToastMsg) showToast("Please enter an address!");
                 return;
             }
+
+            // Save in Browser localStorage so refresh karne par na hate!
+            try {
+                localStorage.setItem(STORAGE_KEY_ADDR, addr);
+            } catch(e) {}
 
             let customDict = null;
             try {
@@ -394,16 +400,19 @@
                 return copy;
             });
 
-            document.getElementById("addrStatus").innerText = "Applied ✅";
+            document.getElementById("addrStatus").innerText = "Applied & Saved ✅";
             document.getElementById("addrStatus").style.color = "#22c55e";
             renderCards();
-            showToast("Address applied to all cards!");
+            if (showToastMsg) showToast("Address applied & saved!");
         }
 
         function resetToOriginal() {
             document.getElementById("customAddressInput").value = "";
             document.getElementById("addrStatus").innerText = "Not Applied";
             document.getElementById("addrStatus").style.color = "#94a3b8";
+            try {
+                localStorage.removeItem(STORAGE_KEY_ADDR);
+            } catch(e) {}
             activeDataList = JSON.parse(JSON.stringify(originalDataList));
             renderCards();
             showToast("Reset to original data!");
@@ -486,7 +495,20 @@
             setTimeout(() => { toast.classList.remove("show"); }, 1800);
         }
 
-        window.onload = renderCards;
+        window.onload = function() {
+            // Check if user previously saved an address in localStorage
+            let savedAddr = "";
+            try {
+                savedAddr = localStorage.getItem(STORAGE_KEY_ADDR) || "";
+            } catch(e) {}
+
+            if (savedAddr) {
+                document.getElementById("customAddressInput").value = savedAddr;
+                applyCommonAddress(false); // auto apply on load/refresh!
+            } else {
+                renderCards();
+            }
+        };
     </script>
 </body>
 </html>
