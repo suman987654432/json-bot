@@ -57,9 +57,74 @@
         .remaining-badge {
             color: #22c55e;
         }
+        
+        /* Common Address Section right inside web UI */
+        .address-container {
+            width: 100%;
+            max-width: 480px;
+            background: #121824;
+            border: 1px solid #1f293d;
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .address-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #38bdf8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .address-input {
+            width: 100%;
+            background-color: #080c14;
+            border: 1px solid #1a2233;
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 13px;
+            padding: 8px 10px;
+            outline: none;
+        }
+        .address-input:focus {
+            border-color: #0284c7;
+        }
+        .address-btns {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-apply-addr {
+            flex: 2;
+            background-color: #0284c7;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 7px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-apply-addr:active {
+            background-color: #0369a1;
+        }
+        .btn-clear-addr {
+            flex: 1;
+            background-color: #ef444422;
+            color: #ef4444;
+            border: 1px solid #ef444444;
+            border-radius: 6px;
+            padding: 7px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
         .btn-copy-all {
             width: 100%;
             max-width: 480px;
+            margin-top: 12px;
             margin-bottom: 12px;
             background-color: #1e293b;
             color: #38bdf8;
@@ -97,7 +162,6 @@
             flex-direction: column;
             gap: 14px;
         }
-        /* Exact photo card styling */
         .json-card {
             background-color: #121824;
             border: 1px solid #1f293d;
@@ -125,7 +189,7 @@
             font-weight: 700;
         }
         .card-number {
-            color: #22c55e; /* Exact photo green */
+            color: #22c55e;
         }
         .card-phone {
             color: #ffffff;
@@ -136,7 +200,6 @@
             gap: 6px;
             align-items: center;
         }
-        /* Buttons matching the photo simple aesthetic */
         .btn-copy-num {
             background-color: #1e293b;
             color: #38bdf8;
@@ -152,7 +215,7 @@
             color: #ffffff;
         }
         .btn-copy {
-            background-color: #0284c7; /* Exact photo bright blue */
+            background-color: #0284c7;
             color: #ffffff;
             border: none;
             border-radius: 6px;
@@ -216,11 +279,24 @@
 
     <div class="header">
         <h1>One-Tap JSON Copy</h1>
-        <p id="subheading">Separate cards. Tap COPY to copy data.</p>
+        <p id="subheading">Separate cards. Tap COPY JSON to copy data.</p>
         
         <div class="stats-bar">
             <span class="stats-badge" id="totalCount">Total: 0</span>
             <span class="remaining-badge" id="remainingCount">Remaining: 0</span>
+        </div>
+
+        <!-- 📍 Common Address Section in Webpage -->
+        <div class="address-container">
+            <div class="address-header">
+                <span>📍 Set Common Address For All Cards</span>
+                <span id="addrStatus" style="color: #94a3b8; font-size: 11px;">Not Applied</span>
+            </div>
+            <input type="text" class="address-input" id="customAddressInput" placeholder="Enter address to add in all JSONs (e.g. Delhi, PIN 110001)">
+            <div class="address-btns">
+                <button class="btn-apply-addr" onclick="applyCommonAddress()">Apply to All Cards</button>
+                <button class="btn-clear-addr" onclick="resetToOriginal()">Reset</button>
+            </div>
         </div>
     </div>
 
@@ -234,6 +310,8 @@
     <script>
         // RAW_JSON_DATA_PLACEHOLDER
 
+        let originalDataList = JSON.parse(JSON.stringify(jsonDataList));
+        let activeDataList = JSON.parse(JSON.stringify(jsonDataList));
         let totalCards = 0;
         let remainingCards = 0;
         let allNumbersList = [];
@@ -246,17 +324,19 @@
             return match ? match[0] : "";
         }
 
-        function init() {
+        function renderCards() {
             const container = document.getElementById("cardsContainer");
-            totalCards = jsonDataList.length;
+            container.innerHTML = "";
+            totalCards = activeDataList.length;
             remainingCards = totalCards;
+            allNumbersList = [];
 
             document.getElementById("subheading").innerText = 
                 `${totalCards} separate cards. Tap COPY JSON to copy only that card's complete JSON. Nothing is redacted.`;
 
             updateStats();
 
-            jsonDataList.forEach((item, index) => {
+            activeDataList.forEach((item, index) => {
                 const cardIndex = index + 1;
                 let phoneNumber = extractPhone(item);
                 if (phoneNumber && /^\d+$/.test(phoneNumber)) {
@@ -286,6 +366,47 @@
                 `;
                 container.appendChild(card);
             });
+        }
+
+        function applyCommonAddress() {
+            const addr = document.getElementById("customAddressInput").value.trim();
+            if (!addr) {
+                showToast("Please enter an address!");
+                return;
+            }
+
+            let customDict = null;
+            try {
+                if (addr.startsWith("{") && addr.endsWith("}")) {
+                    customDict = JSON.parse(addr);
+                }
+            } catch(e) {}
+
+            activeDataList = originalDataList.map(item => {
+                let copy = JSON.parse(JSON.stringify(item));
+                if (typeof copy === 'object' && copy !== null) {
+                    if (customDict && typeof customDict === 'object') {
+                        Object.assign(copy, customDict);
+                    } else {
+                        copy["address"] = addr;
+                    }
+                }
+                return copy;
+            });
+
+            document.getElementById("addrStatus").innerText = "Applied ✅";
+            document.getElementById("addrStatus").style.color = "#22c55e";
+            renderCards();
+            showToast("Address applied to all cards!");
+        }
+
+        function resetToOriginal() {
+            document.getElementById("customAddressInput").value = "";
+            document.getElementById("addrStatus").innerText = "Not Applied";
+            document.getElementById("addrStatus").style.color = "#94a3b8";
+            activeDataList = JSON.parse(JSON.stringify(originalDataList));
+            renderCards();
+            showToast("Reset to original data!");
         }
 
         function escapeHtml(text) {
@@ -365,7 +486,7 @@
             setTimeout(() => { toast.classList.remove("show"); }, 1800);
         }
 
-        window.onload = init;
+        window.onload = renderCards;
     </script>
 </body>
 </html>
