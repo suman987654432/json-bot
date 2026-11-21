@@ -78,6 +78,10 @@ def home():
 def healthz():
     return {"status": "ok"}
 
+@app.get("/favicon.ico")
+def favicon():
+    return {}
+
 @app.get("/view/{filename}", response_class=HTMLResponse)
 def view_html(filename: str):
     clean_name = os.path.basename(filename)
@@ -544,9 +548,27 @@ def start_bot_polling():
             time.sleep(5)
 
 
+def ping_self():
+    """Keeps the Render free tier awake by pinging itself every 10 minutes"""
+    time.sleep(30)
+    import requests
+    while True:
+        try:
+            if WEB_BASE_URL:
+                requests.get(f"{WEB_BASE_URL.rstrip('/')}/healthz", timeout=10)
+        except Exception:
+            pass
+        time.sleep(600)  # Ping every 10 minutes
+
+
 if __name__ == "__main__":
+    # Start bot thread
     t = threading.Thread(target=start_bot_polling, daemon=True)
     t.start()
+
+    # Start self-ping thread to prevent Render sleep
+    t_ping = threading.Thread(target=ping_self, daemon=True)
+    t_ping.start()
 
     print(f"🌐 FastAPI Web Server listening on port {PORT}...")
     uvicorn.run(app, host="0.0.0.0", port=PORT, access_log=True)
