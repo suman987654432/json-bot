@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import re
 import uuid
@@ -41,13 +42,11 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-                # Ensure structure
                 for a in initial_admins:
                     if a not in cfg.get("admin_ids", []):
                         cfg.setdefault("admin_ids", []).append(a)
                 if "channels" not in cfg:
                     cfg["channels"] = []
-                    # backward compatibility
                     if cfg.get("channel_id"):
                         cfg["channels"].append({
                             "id": cfg.get("channel_id"),
@@ -94,7 +93,6 @@ def is_admin(user_id):
     return user_id in config.get("admin_ids", [])
 
 def get_unjoined_channels(user_id):
-    """Returns a list of channels that the user hasn't joined yet."""
     if not config.get("force_sub", True):
         return []
     
@@ -112,7 +110,6 @@ def get_unjoined_channels(user_id):
             if member.status not in ['creator', 'administrator', 'member']:
                 unjoined.append(ch)
         except Exception as e:
-            # If bot is not admin or channel is private without bot access, skip to prevent block
             print(f"Error checking channel {ch_id}: {e}")
             pass
     return unjoined
@@ -177,7 +174,6 @@ def handle_start(message):
         config["users"].append(user_id)
         save_config(config)
 
-    # Check Channel Subscription for normal users
     if not is_admin(user_id):
         unjoined = get_unjoined_channels(user_id)
         if unjoined:
@@ -539,8 +535,13 @@ def handle_text_json(message):
 
 
 def start_bot_polling():
-    print("🚀 Telegram Bot is polling...")
-    bot.infinity_polling(skip_pending=True)
+    while True:
+        try:
+            print("🚀 Telegram Bot is polling...")
+            bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=20)
+        except Exception as e:
+            print(f"⚠️ Polling Exception (retrying in 5s): {e}")
+            time.sleep(5)
 
 
 if __name__ == "__main__":
