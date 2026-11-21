@@ -2,9 +2,14 @@
     "admin_ids": [
         8338099238
     ],
-    "channel_id": "",
-    "channel_link": "",
-    "force_sub": false,
+    "channels": [
+        {
+            "id": "@shein577",
+            "link": "https://t.me/shein577",
+            "title": "Main Channel"
+        }
+    ],
+    "force_sub": true,
     "users": [
         8338099238
     ]
